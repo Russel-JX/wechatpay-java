@@ -1,5 +1,5 @@
 [![JavaDoc](http://img.shields.io/badge/javadoc-reference-blue.svg)](https://www.javadoc.io/doc/com.github.wechatpay-apiv3/wechatpay-java/latest/index.html)
-![Maven Central](https://img.shields.io/maven-central/v/com.github.wechatpay-apiv3/wechatpay-java?versionPrefix=0.2.10)
+![Maven Central](https://img.shields.io/maven-central/v/com.github.wechatpay-apiv3/wechatpay-java?versionPrefix=0.2.12)
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=wechatpay-apiv3_wechatpay-java&metric=security_rating)](https://sonarcloud.io/summary/overall?id=wechatpay-apiv3_wechatpay-java)
 [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=wechatpay-apiv3_wechatpay-java&metric=sqale_rating)](https://sonarcloud.io/summary/overall?id=wechatpay-apiv3_wechatpay-java)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=wechatpay-apiv3_wechatpay-java&metric=coverage)](https://sonarcloud.io/summary/overall?id=wechatpay-apiv3_wechatpay-java)
@@ -36,7 +36,7 @@
 在你的 build.gradle 文件中加入如下的依赖
 
 ```groovy
-implementation 'com.github.wechatpay-apiv3:wechatpay-java:0.2.10'
+implementation 'com.github.wechatpay-apiv3:wechatpay-java:0.2.12'
 ```
 
 #### Maven
@@ -47,7 +47,7 @@ implementation 'com.github.wechatpay-apiv3:wechatpay-java:0.2.10'
 <dependency>
   <groupId>com.github.wechatpay-apiv3</groupId>
   <artifactId>wechatpay-java</artifactId>
-  <version>0.2.10</version>
+  <version>0.2.12</version>
 </dependency>
 ```
 
@@ -75,7 +75,7 @@ public class QuickStart {
     /** 商户证书序列号 */
     public static String merchantSerialNumber = "5157F09EFDC096DE15EBE81A47057A72********";
     /** 商户APIV3密钥 */
-    public static String apiV3key = "...";
+    public static String apiV3Key = "...";
 
     public static void main(String[] args) {
         // 使用自动更新平台证书的RSA配置
@@ -85,7 +85,7 @@ public class QuickStart {
                         .merchantId(merchantId)
                         .privateKeyFromPath(privateKeyPath)
                         .merchantSerialNumber(merchantSerialNumber)
-                        .apiV3Key(apiV3key)
+                        .apiV3Key(apiV3Key)
                         .build();
         // 构建service
         NativePayService service = new NativePayService.Builder().config(config).build();
@@ -200,7 +200,7 @@ Config config =
         .merchantId(merchantId)
         .privateKeyFromPath(privateKeyPath)
         .merchantSerialNumber(merchantSerialNumber)
-        .apiV3Key(apiV3key)
+        .apiV3Key(apiV3Key)
         .build();
 ```
 
@@ -233,7 +233,7 @@ Config config =
         .build();
 ```
 
-## 回调通知验签和解密
+## 回调通知
 
 首先，你需要在你的服务器上创建一个公开的 HTTP 端点，接受来自微信支付的回调通知。
 当接收到回调通知，使用 [notification](core/src/main/java/com/wechat/pay/java/core/notification) 中的 `NotificationParser` 解析回调通知。
@@ -241,23 +241,24 @@ Config config =
 具体步骤如下：
 
 1. 使用回调通知请求的数据，构建 `RequestParam`。
-    - HTTP 头 `Wechatpay-Signature`
-    - HTTP 头 `Wechatpay-Nonce`
-    - HTTP 头 `Wechatpay-Timestamp`
-    - HTTP 头 `Wechatpay-Serial`
-    - HTTP 头 `Wechatpay-Signature-Type`
-    - HTTP 请求体 body。切记使用原始报文，不要用 JSON 对象序列化后的字符串，避免验签的 body 和原文不一致。
-2. 初始化 `RSAAutoCertificateConfig`。微信支付平台证书由 SDK 的自动更新平台能力提供，也可以使用本地证书。
-3. 初始化 `NotificationParser`。
-4. 调用 `NotificationParser.parse()` 验签、解密并将 JSON 转换成具体的通知回调对象。
+    - HTTP 请求体 body。**切记使用原始报文**，不要用 JSON 对象序列化后的字符串，避免验签的 body 和原文不一致。
+    - HTTP 头 `Wechatpay-Signature`。应答的微信支付签名。
+    - HTTP 头 `Wechatpay-Serial`。微信支付平台证书的序列号，验签必须使用序列号对应的微信支付平台证书。
+    - HTTP 头 `Wechatpay-Nonce`。签名中的随机数。
+    - HTTP 头 `Wechatpay-Timestamp`。签名中的时间戳。
+    - HTTP 头 `Wechatpay-Signature-Type`。签名类型。
+1. 初始化 `RSAAutoCertificateConfig`。微信支付平台证书由 SDK 的自动更新平台能力提供，也可以使用本地证书。
+1. 初始化 `NotificationParser`。
+1. 调用 `NotificationParser.parse()` 验签、解密并将 JSON 转换成具体的通知回调对象。如果验签失败，SDK 会抛出 `ValidationException`。
+1. 接下来可以执行你的业务逻辑了。如果执行成功，你应返回 `200 OK` 的状态码。如果执行失败，你应返回 `4xx` 或者 `5xx`的状态码，例如数据库操作失败建议返回 `500 Internal Server Error`。
 
 ```java
 // 构造 RequestParam
 RequestParam requestParam = new RequestParam.Builder()
-        .serialNumber(wechatPayCertificateSerialNumber)
-        .nonce(nonce)
-        .signature(signature)
-        .timestamp(timestamp)
+        .serialNumber(wechatPaySerial)
+        .nonce(wechatpayNonce)
+        .signature(wechatSignature)
+        .timestamp(wechatTimestamp)
         .body(requestBody)
         .build();
 
@@ -267,17 +268,31 @@ NotificationConfig config = new RSAAutoCertificateConfig.Builder()
         .merchantId(merchantId)
         .privateKeyFromPath(privateKeyPath)
         .merchantSerialNumber(merchantSerialNumber)
-        .apiV3Key(apiV3key)
+        .apiV3Key(apiV3Key)
         .build();
 
 // 初始化 NotificationParser
 NotificationParser parser = new NotificationParser(config);
 
-// 以支付通知回调为例，验签、解密并转换成 Transaction
-Transaction transaction = parser.parse(requestParam, Transaction.class);
+try {
+  // 以支付通知回调为例，验签、解密并转换成 Transaction
+  Transaction transaction = parser.parse(requestParam, Transaction.class);
+} catch (ValidationException e) {
+  // 签名验证失败，返回 401 UNAUTHORIZED 状态码
+  logger.error("sign verification failed", e);
+  return ResponseEntity.status(HttpStatus.UNAUTHORIZED);
+}
+
+// 如果处理失败，应返回 4xx/5xx 的状态码，例如 500 INTERNAL_SERVER_ERROR
+if (/* process error */) {
+  return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR);
+}
+
+// 处理成功，返回 200 OK 状态码
+return ResponseEntity.status(HttpStatus.OK);
 ```
 
-常用的通知回调对象类型：
+常用的通知回调调对象类型有：
 
 - 支付 `Transaction`
 - 退款 `RefundNotification`
@@ -293,8 +308,8 @@ Transaction transaction = parser.parse(requestParam, Transaction.class);
 发送请求步骤如下：
 
 1. 初始化 `OkHttpClientAdapter`，建议使用 `DefaultHttpClientBuilder` 构建。
-2. 构建请求 `HttpRequest`。
-3. 调用 `httpClient.execute` 或者 `httpClient.get` 等方法来发送 HTTP 请求。`httpClient.execute` 支持发送 GET、PUT、POST、PATCH、DELETE 请求，也可以调用指定的 HTTP 方法发送请求。
+1. 构建请求 `HttpRequest`。
+1. 调用 `httpClient.execute` 或者 `httpClient.get` 等方法来发送 HTTP 请求。`httpClient.execute` 支持发送 GET、PUT、POST、PATCH、DELETE 请求，也可以调用指定的 HTTP 方法发送请求。
 
 [OkHttpClientAdapterTest](core/src/test/java/com/wechat/pay/java/core/http/OkHttpClientAdapterTest.java) 中演示了如何构造和发送 HTTP 请求。如果现有的 `OkHttpClientAdapter` 实现类不满足你的需求，可以继承 [AbstractHttpClient](core/src/main/java/com/wechat/pay/java/core/http/AbstractHttpClient.java) 拓展实现。
 
@@ -330,14 +345,24 @@ inputStream.close();
 
 ### 自动加解密
 
-如果是 SDK 已支持的接口，例如商家转账，SDK 将根据契约自动对敏感信息做加解密：
+如果 SDK 已支持的接口，例如商家转账，SDK 将根据契约自动对敏感信息做加解密：
 
 - 发起请求时，开发者设置原文。SDK 自动加密敏感信息，并设置 `Wechatpay-Serial` 请求头
 - 收到应答时，解密器自动解密敏感信息，开发者得到原文
 
 ### 手动加解密
 
-如果是 SDK 尚未支持的接口，你可以使用 [cipher](core/src/main/java/com/wechat/pay/java/core/cipher) 中的 `RSAPrivacyEncryptor` 和 `RSAPrivacyDecryptor` ，手动对敏感信息加解密。
+如果 SDK 尚未支持某个接口，你可以使用 [cipher](core/src/main/java/com/wechat/pay/java/core/cipher) 中的 `RSAPrivacyEncryptor` 和 `RSAPrivacyDecryptor` ，手动对敏感信息加解密。
+
+当你使用自动获取的微信支付平台证书时，可以通过以下方法获取加密器 `PrivacyEncryptor`，以及对应的证书序列号。
+
+```java
+PrivacyEncryptor encryptor = config.createEncryptor();
+String wechatPayCertificateSerialNumber = encryptor.getWechatpaySerial();
+String ciphertext = encryptor.encryptToString(plaintext);
+```
+
+当你使用本地的公钥或私钥，可以通过以下方法直接构建加密器 `PrivacyEncryptor` 和解密器 `PrivacyDecryptor`。
 
 ```java
 // 微信支付平台证书中的公钥
@@ -442,17 +467,6 @@ JsapiService service = new JsapiService.Builder().httpclient(httpClient).build()
 - 微信支付应答使用**微信支付平台私钥**签名。微信支付应答返回微信支付平台证书序列号。
 
 综上所述，请求和应答的证书序列号是不一致的。
-
-### 如何获取微信支付平台证书的证书序列号？
-
-对请求中的敏感信息手动加密时，需要在请求的 HTTP 头部中传入加密使用证书的证书序列号。
-
-如果你是自动获取微信支付平台证书，可以通过以下方法获取证书序列号。
-
-```java
-PrivacyEncryptor encryptor = config.createEncryptor();
-String wechatPayCertificateSerialNumber = encryptor.getWechatpaySerial();
-```
 
 ### 证书和回调解密需要的 AesGcm 解密在哪里？
 
